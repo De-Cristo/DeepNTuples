@@ -14,7 +14,6 @@ import subprocess
 from helpers import submitjob, createClusterInfo, resetJobOutput
 
 def doSub():
-    
     from argparse import ArgumentParser as argps
 
     swdir = os.path.realpath(os.environ['CMSSW_BASE'])
@@ -31,7 +30,7 @@ def doSub():
     parser.add_argument('--outpath',default='',help='set path to store the .root output')
     parser.add_argument('--walltime',default='21600',help='set job wall time in seconds')
     parser.add_argument('--maxsize',default='2000',help='set maximum allowed size of output ntuple')
-    
+
     args = parser.parse_args()
     
     jobruntime=args.walltime
@@ -44,7 +43,6 @@ def doSub():
         if not os.path.isdir(eosGlobalOutDir):
             print('please specify a valid output path')
             sys.exit(-1)
-    
     
     if os.path.isdir(args.jobdir):
         print (args.jobdir, 'exists: EXIT')
@@ -72,7 +70,7 @@ def doSub():
         
     usercertfile=os.getenv('HOME')+'/.globus/usercert.pem'
     userkeyfile=os.getenv('HOME')+'/.globus/userkey.pem'
-    
+
     nousercertsfound=False
     if not os.path.isfile(usercertfile):
         print('pleace locate your grid certificate file in ~/.globus/usercert.pem')
@@ -84,61 +82,45 @@ def doSub():
     if nousercertsfound:
         print('please follow the Twiki https://twiki.cern.ch/twiki/bin/view/CMSPublic/WorkBookStartingGrid')
         exit()
-        
-        
+
     #recreates samples directory (removing old one avoids possible errors in creating importsamples)
     samplescriptdir=os.getenv('HOME')+'/.deepntuples_scripts_tmp'
+    #if os.path.isdir(samplescriptdir):
+    #    shutil.rmtree(samplescriptdir)
+    #end
+    #os.mkdir(samplescriptdir)
+
     if not os.path.isdir(samplescriptdir):
         os.mkdir(samplescriptdir)
-    
+
     samplescriptdir+='/'
-    
-    #https://twiki.cern.ch/twiki/bin/view/CMSPublic/WorkBookStartingGrid
-    
-    #testurl='https://cmsweb.cern.ch/das/makepy?dataset=/QCD_Pt_1000to1400_TuneCUETP8M1_13TeV_pythia8/PhaseIFall16MiniAOD-PhaseIFall16PUFlat20to50_PhaseIFall16_81X_upgrade2017_realistic_v26-v1/MINIAODSIM&instance=prod/global'
-    
-    #make a system call to wget.. urllib is not powerful enoguh apparently
-    
-    
-    #checkcert = subprocess.Popen(['wget','--certificate='+certpath,'-o bla.py', testurl], stdout=subprocess.PIPE, 
-    #                                 stderr=subprocess.PIPE)
-    
-    #print(checkcert.communicate())
-    #exit()#testing
-    
-    ######## all checks done. From now on it just runs
-    
-    # create output dir
-    
+
+    print(samplescriptdir)
+
     os.mkdir(args.jobdir)
     shutil.copy(configFile, args.jobdir)
     configFile=os.path.realpath(os.path.join(args.jobdir, os.path.basename(configFile)))
-    
-    
+
     globalOutDir=eosGlobalOutDir+'/'+time.strftime('%a_%H%M%S')+'_'+args.jobdir
     globalOutDir=os.path.realpath(globalOutDir)
-    
+
     print ('submitting jobs for '+configFile)
-    
+
     samplesdir='DeepNTuples.DeepNtuplizer.samples.'
-    
-    #format: njobs  sample  output  args1 args2 ... (simple whitespace)
+
     lines = [line.rstrip('\n') for line in open(args.file)]
-    
+
     for sampledescription in lines:
-        
         if sampledescription.strip().startswith("#"):
             continue
         
         entries= [s.strip() for s in sampledescription.split('  ') if s]
         if len(entries) < 3:
             continue
-            
-        
-        #check if sufficient files
-        
-        
-        ######check out from DAS
+    #end
+
+        print(entries)
+
         samplename=entries[1]
         isdasname=False
         #do differently if it is a DAS name
@@ -147,7 +129,9 @@ def doSub():
             if '*' in samplename:
                 print('no wildcards in sample names allowed')
                 exit()
-        
+            #end
+        #end
+
         print('preparing\n'+samplename)
         sample=""
         if not isdasname:
@@ -156,12 +140,15 @@ def doSub():
             import string
             chars = re.escape(string.punctuation)
             scriptfile=re.sub(r'['+chars+']', '', str(samplename))
-            scriptfile=scriptfile
+            print(scriptfile+'\n')
+
             if not os.path.isfile(samplescriptdir+scriptfile+'.py'):
                 cmd = 'dasgoclient -query="file dataset=%s"' % (samplename)
+                print(cmd)
                 dasquery = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 sout = dasquery.communicate()[0]
                 filelist = ['"%s",' % f for f in sout.strip().split('\n')]
+                #print(filelist)
 
                 template_sample = os.path.join(os.environ['CMSSW_BASE'], 'src/DeepNTuples/DeepNtuplizer/python/samples/samples_template.py')
                 dest_file = samplescriptdir+scriptfile+'.py'
@@ -171,23 +158,22 @@ def doSub():
                         fout.write(s)
 
             sample=scriptfile
-        
-        
-        
+            print(sample)
+
         sys.path.append(samplescriptdir)
         sys.path.append(swdir+'/src/DeepNTuples/DeepNtuplizer/python/samples')
         importsample=sample.split('.')[-1]
-        
-        #print(importsample)
+        print(importsample)
         cmssource = __import__(importsample)
         #print(cmssource.source)
-        
+
         nJobs=entries[0]
         totalfiles=len(cmssource.source.fileNames)+len(cmssource.source.secondaryFileNames)
         if int(nJobs)>totalfiles:
             print('reduced number of jobs to number of files (',totalfiles,') from ', nJobs)
             nJobs=str(totalfiles)
-        
+        #end
+
         outputFile=entries[2]
         jobargs=''
         if len(entries) >3:
@@ -435,6 +421,7 @@ exit $exitstatus
             pass
         
     exit()
-    
-    
+
+#END
+
 doSub()
